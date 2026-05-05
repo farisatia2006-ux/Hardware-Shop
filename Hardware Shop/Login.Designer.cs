@@ -33,7 +33,7 @@
             this.simpleButton1 = new DevExpress.XtraEditors.SimpleButton();
             this.label2 = new System.Windows.Forms.Label();
             this.label3 = new System.Windows.Forms.Label();
-            this.Close = new System.Windows.Forms.Label();
+            this.CloseLabel = new System.Windows.Forms.Label();
             this.Passtb = new System.Windows.Forms.TextBox();
             this.UserTb = new System.Windows.Forms.TextBox();
             this.loginbtn = new System.Windows.Forms.Button();
@@ -83,17 +83,17 @@
             this.label3.TabIndex = 0;
             this.label3.Text = "Password";
             // 
-            // Close
+            // CloseLabel
             // 
-            this.Close.AutoSize = true;
-            this.Close.Font = new System.Drawing.Font("Times New Roman", 13.8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.Close.ForeColor = System.Drawing.Color.White;
-            this.Close.Location = new System.Drawing.Point(594, 9);
-            this.Close.Name = "Close";
-            this.Close.Size = new System.Drawing.Size(27, 25);
-            this.Close.TabIndex = 0;
-            this.Close.Text = "X";
-            this.Close.Click += new System.EventHandler(this.label4_Click);
+            this.CloseLabel.AutoSize = true;
+            this.CloseLabel.Font = new System.Drawing.Font("Times New Roman", 13.8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.CloseLabel.ForeColor = System.Drawing.Color.White;
+            this.CloseLabel.Location = new System.Drawing.Point(594, 9);
+            this.CloseLabel.Name = "Close";
+            this.CloseLabel.Size = new System.Drawing.Size(27, 25);
+            this.CloseLabel.TabIndex = 0;
+            this.CloseLabel.Text = "X";
+            this.CloseLabel.Click += new System.EventHandler(this.label4_Click);
             // 
             // Passtb
             // 
@@ -147,7 +147,7 @@
             this.Controls.Add(this.UserTb);
             this.Controls.Add(this.Passtb);
             this.Controls.Add(this.simpleButton1);
-            this.Controls.Add(this.Close);
+            this.Controls.Add(this.CloseLabel);
             this.Controls.Add(this.label3);
             this.Controls.Add(this.ClrLbl);
             this.Controls.Add(this.label2);
@@ -169,7 +169,7 @@
         private DevExpress.XtraEditors.SimpleButton simpleButton1;
         private System.Windows.Forms.Label label2;
         private System.Windows.Forms.Label label3;
-        private System.Windows.Forms.Label Close;
+        private System.Windows.Forms.Label CloseLabel;
         private System.Windows.Forms.TextBox Passtb;
         private System.Windows.Forms.TextBox UserTb;
         private System.Windows.Forms.Button loginbtn;
