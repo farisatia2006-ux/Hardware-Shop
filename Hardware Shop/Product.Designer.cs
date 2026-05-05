@@ -1,4 +1,6 @@
-﻿namespace Hardware_Shop
+﻿using System;
+
+namespace Hardware_Shop
 {
     partial class Product
     {
@@ -19,7 +21,7 @@
             }
             base.Dispose(disposing);
         }
-
+                
         #region Windows Form Designer generated code
 
         /// <summary>
@@ -330,6 +332,7 @@
             this.dataGridView1.RowTemplate.Height = 24;
             this.dataGridView1.Size = new System.Drawing.Size(753, 274);
             this.dataGridView1.TabIndex = 7;
+            this.dataGridView1.CellDoubleClick += new System.Windows.Forms.DataGridViewCellEventHandler(this.dataGridView1_CellDoubleClick);
             this.dataGridView1.DoubleClick += new System.EventHandler(this.dataGridView1_DoubleClick);
             // 
             // label10

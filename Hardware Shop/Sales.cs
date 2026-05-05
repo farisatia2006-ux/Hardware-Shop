@@ -1,410 +1,416 @@
-﻿using DevExpress.Data;
-using DevExpress.Utils.Taskbar.Core;
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Data;
-using System.Data.SqlClient;
 using System.Drawing;
 using System.Drawing.Printing;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Diagnostics;
+using System.Configuration;
 
 namespace Hardware_Shop
 {
-    public partial class Sales : Form
+    // ============================================================
+    //  Sales.cs — REFACTORED
+    //
+    //  التغييرات من منظور OOP:
+    //  • ترث من BaseDataForm (Inheritance) ✅
+    //  • DisplayData / ResetFields تعمل override (Polymorphism) ✅
+    //  • بيمشي للـ DatabaseHelper (Encapsulation) ✅
+    //  • بيمشي للـ AuditLogger (File Handling) ✅
+    //  • Exception Handling محسّن ✅
+    //  • بيمشي للـ NavigateTo (INavigable) ✅
+    //  • تم تصحيح البق في UpdateBtn: Quantity * → Quantity + ✅
+    //  • تم إضافة رسالة خطأ للـ catch الفارغ ✅
+    // ============================================================
+
+    /// <summary>
+    /// Sales management form.
+    /// Inherits from BaseDataForm — gains DB, logging, grid styling, navigation.
+    /// Demonstrates: Inheritance, Polymorphism, Exception Handling,
+    ///               File Handling (via AuditLogger), Encapsulation.
+    /// </summary>
+    public partial class Sales : BaseDataForm  // Inheritance ✅
     {
+        string connectionString = @"Data Source=(LocalDB)\MSSQLLocalDB;AttachDbFilename=|DataDirectory|\Hardware_Shop_MS.mdf;Integrated Security=True;";
+        // ── Print support (encapsulated fields) ──────────────────
+        private readonly PrintDocument _printDocument = new PrintDocument();
+        private int _currentRow = 0;
+        private int[] _columnWidths;
+
+        // ── Constructor ──────────────────────────────────────────
         public Sales()
         {
             InitializeComponent();
-            DisplaySales();
-
+            DisplayData();
         }
 
-        SqlConnection con = new SqlConnection(@"Data Source=(LocalDB)\MSSQLLocalDB;AttachDbFilename=""C:\Users\USER\OneDrive\المستندات\Hardware Shop MS.mdf"";Integrated Security=True;Connect Timeout=30");
-        private void DisplaySales()
+        // ────────────────────────────────────────────────────────
+        // POLYMORPHISM — Overriding abstract methods ✅
+        // ────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Loads and displays all sales in the DataGridView.
+        /// Overrides abstract DisplayData() from BaseDataForm. ✅
+        /// </summary>
+        protected override void DisplayData()  // Polymorphism ✅
         {
             try
             {
-                con.Open();
-                SqlDataAdapter da = new SqlDataAdapter("SELECT * FROM Sales", con);
-                DataTable dt = new DataTable();
-                da.Fill(dt);
+                DataTable dt = _db.ExecuteQuery("SELECT * FROM Sales");
                 dataGridView1.DataSource = dt;
-                con.Close();
             }
-            catch (Exception ex)
+            catch (ApplicationException ex)
             {
-                MessageBox.Show(ex.Message);
+                ShowMessage(ex.Message, "Load Error", MessageBoxIcon.Error);
             }
-            finally { con.Close(); }
         }
 
-        private void ResetFields()
+        /// <summary>
+        /// Clears all sales input fields.
+        /// Overrides abstract ResetFields() from BaseDataForm. ✅
+        /// </summary>
+        protected override void ResetFields()  // Polymorphism ✅
         {
-
-
             CusIdCB.Text = "";
             CusNameTb.Text = "";
             ProaldCb.Text = "";
             ProNameTb.Text = "";
             QuenTb.Text = "";
             PriceTb.Text = "";
-            dateTimePicker1.Text = "";
+            dateTimePicker1.Value = DateTime.Now;
+        }
 
+        // ────────────────────────────────────────────────────────
+        // LOAD — populate ComboBoxes from DB
+        // ────────────────────────────────────────────────────────
 
+        private void Sales_Load(object sender, EventArgs e)
+        {
+            LoadCustomerIDs();
+            LoadProductIDs();
+            ApplyGridStyle(dataGridView1);  // Inherited from BaseDataForm ✅
+            _printDocument.PrintPage += PrintDocument_PrintPage;
         }
 
         private void LoadCustomerIDs()
         {
             try
             {
-                con.Open();
-                SqlCommand cmd = new SqlCommand("SELECT CustomerID FROM Customers", con);
-                SqlDataReader sqlDataReader = cmd.ExecuteReader();
-                while (sqlDataReader.Read())
-                {
-                    CusIdCB.Items.Add(sqlDataReader["CustomerID"].ToString());
-                }
-                sqlDataReader.Close();
+                DataTable dt = _db.ExecuteQuery("SELECT CustomerID FROM Customers");
+                foreach (DataRow row in dt.Rows)
+                    CusIdCB.Items.Add(row["CustomerID"].ToString());
             }
-            catch (Exception ex)
+            catch (ApplicationException ex)
             {
-                MessageBox.Show(ex.Message);
+                ShowMessage($"Could not load customers:\n{ex.Message}",
+                            "Load Error", MessageBoxIcon.Error);
             }
-            finally { con.Close(); }
         }
 
         private void LoadProductIDs()
         {
             try
             {
-                con.Open();
-                SqlCommand cmd = new SqlCommand("SELECT ProductID FROM Products", con);
-                SqlDataReader sqlDataReader = cmd.ExecuteReader();
-                while (sqlDataReader.Read())
-                {
-                    ProaldCb.Items.Add(sqlDataReader["ProductID"].ToString());
-                }
-                sqlDataReader.Close();
+                DataTable dt = _db.ExecuteQuery("SELECT ProductID FROM Products");
+                foreach (DataRow row in dt.Rows)
+                    ProaldCb.Items.Add(row["ProductID"].ToString());
             }
-            catch (Exception ex)
+            catch (ApplicationException ex)
             {
-                MessageBox.Show(ex.Message);
+                ShowMessage($"Could not load products:\n{ex.Message}",
+                            "Load Error", MessageBoxIcon.Error);
             }
-            finally { con.Close(); }
         }
 
-
-
-
-        private void label2_Click(object sender, EventArgs e)
-        {
-            Product product = new Product();
-            product.Show();
-            this.Hide();
-        }
-
-        private void label3_Click(object sender, EventArgs e)
-        {
-            Customers customers = new Customers();
-            customers.Show();
-            this.Hide();
-        }
-
-        private void label5_Click(object sender, EventArgs e)
-        {
-            Login login = new Login();
-            login.Show();
-            this.Hide();
-        }
-
-        private void Cross_Click(object sender, EventArgs e)
-        {
-            this.Close();
-        }
-
-        private void Clrbtn_Click(object sender, EventArgs e)
-        {
-            ResetFields();
-        }
+        // ────────────────────────────────────────────────────────
+        // COMBOBOX CHANGE EVENTS
+        // ────────────────────────────────────────────────────────
 
         private void CusIdCB_SelectedIndexChanged(object sender, EventArgs e)
         {
-            con.Open();
-            SqlCommand sqlCommand = new SqlCommand("SELECT CName FROM Customers WHERE CustomerID = @ID", con);
-            sqlCommand.Parameters.AddWithValue("@ID", CusIdCB.Text);
-            SqlDataReader sqlDataReader = sqlCommand.ExecuteReader();
-            if (sqlDataReader.Read())
+            try
             {
-                CusNameTb.Text = sqlDataReader["CName"].ToString();
+                object result = _db.ExecuteScalar(
+                    "SELECT CName FROM Customers WHERE CustomerID = @ID",
+                    new Dictionary<string, object> { { "@ID", CusIdCB.Text } });
 
+                CusNameTb.Text = result?.ToString() ?? "";
             }
-            con.Close();
+            catch (ApplicationException ex)
+            {
+                ShowMessage(ex.Message, "Error", MessageBoxIcon.Error);
+            }
         }
 
         private void ProaldCb_SelectedIndexChanged(object sender, EventArgs e)
         {
-            con.Open();
-            SqlCommand sqlCommand = new SqlCommand("SELECT ProductName ,Price FROM Products WHERE ProductID = @ID", con);
-            sqlCommand.Parameters.AddWithValue("@ID", ProaldCb.Text);
-            SqlDataReader sqlDataReader = sqlCommand.ExecuteReader();
-            if (sqlDataReader.Read())
-            {
-                ProNameTb.Text = sqlDataReader["ProductName"].ToString();
-                PriceTb.Text = sqlDataReader["Price"].ToString();
-
-            }
-            con.Close();
-        }
-
-        private void Sales_Load(object sender, EventArgs e)
-        {
-            LoadCustomerIDs();
-            LoadProductIDs();
-
-            Color customColor = Color.FromArgb(44, 62, 80); // Custom color
-
-            dataGridView1.EnableHeadersVisualStyles = false;
-            dataGridView1.ColumnHeadersDefaultCellStyle.BackColor = customColor;
-            dataGridView1.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-            dataGridView1.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 9, FontStyle.Bold);
-
-            dataGridView1.DefaultCellStyle.SelectionBackColor = customColor;
-            dataGridView1.DefaultCellStyle.SelectionForeColor = Color.White;
-
-            dataGridView1.GridColor = Color.LightGray;
-
-            PrintDocument.PrintPage += new PrintPageEventHandler(PrintDocument_PrintPage);
-
-        }
-
-        private void Addbtn_Click(object sender, EventArgs e)
-        {
-            if (CusIdCB.Text == "" || ProaldCb.Text == "" || QuenTb.Text == "")
-            {
-                MessageBox.Show("Missing Information");
-            }
-            int quantitySold;
-            if (!int.TryParse(QuenTb.Text, out quantitySold) || quantitySold <= 0)
-            {
-                MessageBox.Show("Please enter a valid quantity.");
-                return;
-            }
-
             try
             {
-                con.Open();
-                SqlCommand sqlCommand = new SqlCommand("SELECT Quantity ,Price FROM Products WHERE ProductID = @PID", con);
-                sqlCommand.Parameters.AddWithValue("@PID", ProaldCb.Text);
-                SqlDataReader reader = sqlCommand.ExecuteReader();
-                if (!reader.Read())
+                DataTable dt = _db.ExecuteQuery(
+                    "SELECT ProductName, Price FROM Products WHERE ProductID = @ID",
+                    new Dictionary<string, object> { { "@ID", ProaldCb.Text } });
+
+                if (dt.Rows.Count > 0)
                 {
-                    MessageBox.Show("Product not found.");
-                    con.Close();
-                    return;
-
+                    ProNameTb.Text = dt.Rows[0]["ProductName"].ToString();
+                    PriceTb.Text = dt.Rows[0]["Price"].ToString();
                 }
-                int availableQuantity = Convert.ToInt32(reader["Quantity"]);
-                decimal unitPrice = Convert.ToDecimal(reader["Price"]);
-                reader.Close();
-
-                if (quantitySold > availableQuantity)
-                {
-                    MessageBox.Show("Stock not available.");
-                    return;
-                }
-                decimal totalPrice = quantitySold * unitPrice;
-
-                SqlCommand insert = new SqlCommand("INSERT INTO Sales (CustomerID, CustomerName,ProductID ,ProductName,QuantitySold , TotalAmount,SaleDate) VALUES (@CID, @CN, @PID, @PN, @QS, @TA,@SD)", con);
-                insert.Parameters.AddWithValue("@CID", CusIdCB.Text);
-                insert.Parameters.AddWithValue("@CN", CusNameTb.Text);
-                insert.Parameters.AddWithValue("@PID", ProaldCb.Text);
-                insert.Parameters.AddWithValue("@PN", ProNameTb.Text);
-                insert.Parameters.AddWithValue("@QS", QuenTb.Text);
-                insert.Parameters.AddWithValue("@TA", totalPrice);
-                insert.Parameters.AddWithValue("@SD", dateTimePicker1.Value);
-                insert.ExecuteNonQuery();
-
-                SqlCommand update = new SqlCommand("UPDATE Products SET Quantity = Quantity - @Qty WHERE ProductID = @PID", con);
-                update.Parameters.AddWithValue("@Qty", quantitySold);
-                update.Parameters.AddWithValue("@PID", ProaldCb.Text);
-                update.ExecuteNonQuery();
-                con.Close();
-
-                DisplaySales();
-                ResetFields();
-                MessageBox.Show("Sale recorded successfully.");
-
             }
-            catch (Exception ex)
+            catch (ApplicationException ex)
             {
-                MessageBox.Show(ex.Message);
+                ShowMessage(ex.Message, "Error", MessageBoxIcon.Error);
             }
-            finally { con.Close(); }
         }
 
         private void QuenTb_TextChanged(object sender, EventArgs e)
         {
-            if (!string.IsNullOrWhiteSpace(ProaldCb.Text) && int.TryParse(QuenTb.Text, out int qty))
+            if (!string.IsNullOrWhiteSpace(ProaldCb.Text) &&
+                int.TryParse(QuenTb.Text, out int qty))
             {
                 try
                 {
-                    con.Open();
-                    SqlCommand S = new SqlCommand("SELECT Price FROM Products WHERE ProductID = @ID", con);
-                    S.Parameters.AddWithValue("@ID", ProaldCb.Text);
-                    object result = S.ExecuteScalar();
-                    con.Close();
+                    object result = _db.ExecuteScalar(
+                        "SELECT Price FROM Products WHERE ProductID = @ID",
+                        new Dictionary<string, object> { { "@ID", ProaldCb.Text } });
 
-                    if (result != null && decimal.TryParse(result.ToString(), out decimal unitPrice))
-                    {
-                        decimal total = qty * unitPrice;
-                        PriceTb.Text = total.ToString("0.00");
-                    }
+                    if (result != null && decimal.TryParse(result.ToString(), out decimal price))
+                        PriceTb.Text = (qty * price).ToString("0.00");
                     else
-                    {
                         PriceTb.Text = "0.00";
-                    }
                 }
-                catch (Exception ex)
+                catch
                 {
-                    con.Close();
                     PriceTb.Text = "0.00";
-                }
-                finally
-                {
-                    con.Close();
                 }
             }
             else
             {
                 PriceTb.Text = "0.00";
             }
+        }
 
+        // ────────────────────────────────────────────────────────
+        // CRUD OPERATIONS
+        // ────────────────────────────────────────────────────────
+
+        private void Addbtn_Click(object sender, EventArgs e)
+        {
+            if (!ValidateSaleInputs()) return;
+
+            if (!int.TryParse(QuenTb.Text, out int quantitySold) || quantitySold <= 0)
+            {
+                ShowMessage("Please enter a valid quantity.", "Validation", MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                // Check available stock
+                DataTable stockDt = _db.ExecuteQuery(
+                    "SELECT Quantity, Price FROM Products WHERE ProductID = @PID",
+                    new Dictionary<string, object> { { "@PID", ProaldCb.Text } });
+
+                if (stockDt.Rows.Count == 0)
+                {
+                    ShowMessage("Product not found.", "Error", MessageBoxIcon.Error);
+                    return;
+                }
+
+                int availableQty = Convert.ToInt32(stockDt.Rows[0]["Quantity"]);
+                decimal unitPrice = Convert.ToDecimal(stockDt.Rows[0]["Price"]);
+
+                if (quantitySold > availableQty)
+                {
+                    ShowMessage($"Stock not available. Available: {availableQty}",
+                                "Stock Error", MessageBoxIcon.Warning);
+                    return;
+                }
+
+                decimal totalPrice = quantitySold * unitPrice;
+
+                // Insert sale record
+                _db.ExecuteNonQuery(
+                    "INSERT INTO Sales (CustomerID, CustomerName, ProductID, ProductName, " +
+                    "QuantitySold, TotalAmount, SaleDate) " +
+                    "VALUES (@CID, @CN, @PID, @PN, @QS, @TA, @SD)",
+                    new Dictionary<string, object>
+                    {
+                        { "@CID", CusIdCB.Text },
+                        { "@CN",  CusNameTb.Text },
+                        { "@PID", ProaldCb.Text },
+                        { "@PN",  ProNameTb.Text },
+                        { "@QS",  quantitySold },
+                        { "@TA",  totalPrice },
+                        { "@SD",  dateTimePicker1.Value }
+                    });
+
+                // Deduct from stock
+                _db.ExecuteNonQuery(
+                    "UPDATE Products SET Quantity = Quantity - @Qty WHERE ProductID = @PID",
+                    new Dictionary<string, object>
+                    {
+                        { "@Qty", quantitySold },
+                        { "@PID", ProaldCb.Text }
+                    });
+
+                _logger.LogAction("INSERT", "Sales",
+                                  $"CustomerID={CusIdCB.Text}, ProductID={ProaldCb.Text}, " +
+                                  $"Qty={quantitySold}, Total={totalPrice:0.00}");
+
+                ShowMessage("Sale recorded successfully.");
+                DisplayData();
+                ResetFields();
+            }
+            catch (ApplicationException ex)
+            {
+                ShowMessage($"Could not record sale:\n{ex.Message}",
+                            "Insert Error", MessageBoxIcon.Error);
+            }
         }
 
         private void UpdateBtn_Click(object sender, EventArgs e)
         {
-            if (dataGridView1.SelectedRows.Count > 0)
+            if (dataGridView1.SelectedRows.Count == 0)
             {
-                int saleId = Convert.ToInt32(dataGridView1.SelectedRows[0].Cells["SaleID"].Value);// Implement the logic to update the selected sale record based on the input fields
-                                                                                                  // You can use a similar approach as in the Addbtn_Click event handler to update the record in the database
-                                                                                                  // After updating, call DisplaySales() to refresh the data grid view
+                ShowMessage("Please select a sale to update.",
+                            "No Selection", MessageBoxIcon.Warning);
+                return;
+            }
 
+            if (!ValidateSaleInputs()) return;
+
+            try
+            {
+                int saleId = Convert.ToInt32(dataGridView1.SelectedRows[0].Cells["SaleID"].Value);
                 int oldQty = Convert.ToInt32(dataGridView1.SelectedRows[0].Cells["QuantitySold"].Value);
                 string productId = dataGridView1.SelectedRows[0].Cells["ProductID"].Value.ToString();
 
-
-
-
-                try
-                {
-                     
-
-                    con.Open();
-                    SqlCommand cmd = new SqlCommand("UPDATE Products SET Quantity = Quantity * @oldQty WHERE ProductID = @PID ", con);
-                    cmd.Parameters.AddWithValue("@oldQty", oldQty);
-                    cmd.Parameters.AddWithValue("@PID", productId);
-                    cmd.ExecuteNonQuery();
-
-                    SqlCommand sqlcommand = new SqlCommand("SELECT Quantity FROM Products WHERE ProductID = @PID", con);
-                    sqlcommand.Parameters.AddWithValue("@PID", ProaldCb.Text);
-
-                    int currentStock = Convert.ToInt32(sqlcommand.ExecuteScalar());
-
-                    int newQty = Convert.ToInt32(QuenTb.Text);
-
-                    if (newQty > currentStock)
+                // Restore old stock first: + old qty back ✅ (BUG FIX: was * instead of +)
+                _db.ExecuteNonQuery(
+                    "UPDATE Products SET Quantity = Quantity + @OldQty WHERE ProductID = @PID",
+                    new Dictionary<string, object>
                     {
-                        MessageBox.Show("Stock not available.");
-                       
-                        return;
-                    }
+                        { "@OldQty", oldQty },
+                        { "@PID",    productId }
+                    });
 
-                    decimal unitPrice = Convert.ToDecimal(PriceTb.Text);
-                    decimal total = newQty * unitPrice;
+                // Check new stock availability
+                object stockResult = _db.ExecuteScalar(
+                    "SELECT Quantity FROM Products WHERE ProductID = @PID",
+                    new Dictionary<string, object> { { "@PID", ProaldCb.Text } });
 
-                    SqlCommand sql = new SqlCommand(@"UPDATE Sales SET CustomerID = @CID, CustomerName = @CN, ProductID = @PID, ProductName = @PN, QuantitySold = @QS, TotalAmount = @TA, SaleDate = @SD WHERE SaleID = @SID", con);
-                    sql.Parameters.AddWithValue("@CID", CusIdCB.Text);
-                    sql.Parameters.AddWithValue("@CN", CusNameTb.Text);
-                    sql.Parameters.AddWithValue("@PID", ProaldCb.Text);
-                    sql.Parameters.AddWithValue("@PN", ProNameTb.Text);
-                    sql.Parameters.AddWithValue("@QS", newQty);
-                    sql.Parameters.AddWithValue("@TA", total);
-                    sql.Parameters.AddWithValue("@SD", dateTimePicker1.Value);
-                    sql.Parameters.AddWithValue("@SID", saleId);
-                    sql.ExecuteNonQuery();
+                int currentStock = Convert.ToInt32(stockResult);
+                int newQty = Convert.ToInt32(QuenTb.Text);
 
-                    SqlCommand sqlCommand = new SqlCommand("UPDATE Products SET Quantity = Quantity - @NewQty WHERE ProductID = @PID", con);
-                    sqlCommand.Parameters.AddWithValue("@NewQty", newQty);
-                    sqlCommand.Parameters.AddWithValue("@PID", ProaldCb.Text);
-                    sqlCommand.ExecuteNonQuery();
-
-                    MessageBox.Show("Sale updated successfully.");
-                    DisplaySales();
-                    ResetFields();
-                    
-                }
-                catch (Exception ex)
+                if (newQty > currentStock)
                 {
-
+                    ShowMessage($"Stock not available. Available: {currentStock}",
+                                "Stock Error", MessageBoxIcon.Warning);
+                    // Rollback: re-deduct old qty
+                    _db.ExecuteNonQuery(
+                        "UPDATE Products SET Quantity = Quantity - @OldQty WHERE ProductID = @PID",
+                        new Dictionary<string, object>
+                        {
+                            { "@OldQty", oldQty },
+                            { "@PID",    productId }
+                        });
+                    return;
                 }
-                finally
-                { con.Close(); }
 
+                decimal unitPrice = Convert.ToDecimal(PriceTb.Text);
+                decimal total = newQty * unitPrice;
 
+                // Update sale record
+                _db.ExecuteNonQuery(
+                    "UPDATE Sales SET CustomerID=@CID, CustomerName=@CN, ProductID=@PID, " +
+                    "ProductName=@PN, QuantitySold=@QS, TotalAmount=@TA, SaleDate=@SD " +
+                    "WHERE SaleID=@SID",
+                    new Dictionary<string, object>
+                    {
+                        { "@CID", CusIdCB.Text },
+                        { "@CN",  CusNameTb.Text },
+                        { "@PID", ProaldCb.Text },
+                        { "@PN",  ProNameTb.Text },
+                        { "@QS",  newQty },
+                        { "@TA",  total },
+                        { "@SD",  dateTimePicker1.Value },
+                        { "@SID", saleId }
+                    });
+
+                // Deduct new qty from stock
+                _db.ExecuteNonQuery(
+                    "UPDATE Products SET Quantity = Quantity - @NewQty WHERE ProductID = @PID",
+                    new Dictionary<string, object>
+                    {
+                        { "@NewQty", newQty },
+                        { "@PID",    ProaldCb.Text }
+                    });
+
+                _logger.LogAction("UPDATE", "Sales",
+                                  $"SaleID={saleId}, NewQty={newQty}, Total={total:0.00}");
+
+                ShowMessage("Sale updated successfully.");
+                DisplayData();
+                ResetFields();
+            }
+            catch (ApplicationException ex)
+            {
+                // FIXED: was empty catch block — now shows meaningful error ✅
+                ShowMessage($"Could not update sale:\n{ex.Message}",
+                            "Update Error", MessageBoxIcon.Error);
             }
         }
 
         private void DelBtn_Click(object sender, EventArgs e)
         {
-            if (dataGridView1.SelectedRows.Count > 0)
+            if (dataGridView1.SelectedRows.Count == 0)
+            {
+                ShowMessage("Please select a sale to delete.",
+                            "No Selection", MessageBoxIcon.Warning);
+                return;
+            }
+
+            DialogResult confirm = MessageBox.Show(
+                "Are you sure you want to delete this sale?",
+                "Confirm Deletion", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+
+            if (confirm != DialogResult.Yes) return;
+
+            try
             {
                 int saleId = Convert.ToInt32(dataGridView1.SelectedRows[0].Cells["SaleID"].Value);
-
                 int qtyToRestore = Convert.ToInt32(dataGridView1.SelectedRows[0].Cells["QuantitySold"].Value);
                 string productId = dataGridView1.SelectedRows[0].Cells["ProductID"].Value.ToString();
 
-                DialogResult dr = MessageBox.Show("Are you sure you want to delete this sale?", "Confirm Deletion", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-                if (dr != DialogResult.Yes) return;
+                // Restore stock: + qty back ✅ (BUG FIX: was * instead of +)
+                _db.ExecuteNonQuery(
+                    "UPDATE Products SET Quantity = Quantity + @OldQty WHERE ProductID = @PID",
+                    new Dictionary<string, object>
+                    {
+                        { "@OldQty", qtyToRestore },
+                        { "@PID",    productId }
+                    });
 
-                try
-                {
-                    con.Open();
+                // Delete sale
+                _db.ExecuteNonQuery(
+                    "DELETE FROM Sales WHERE SaleID = @SaleID",
+                    new Dictionary<string, object> { { "@SaleID", saleId } });
 
-                    SqlCommand cmd = new SqlCommand("UPDATE Products SET Quantity = Quantity *@oldQty WHERE ProductID = @PID ", con);
-                    cmd.Parameters.AddWithValue("@oldQty", qtyToRestore);
-                    cmd.Parameters.AddWithValue("@PID", productId);
-                    cmd.ExecuteNonQuery();
+                _logger.LogAction("DELETE", "Sales",
+                                  $"SaleID={saleId}, RestoredQty={qtyToRestore}");
 
-                    SqlCommand cmd2 = new SqlCommand("DELETE FROM Sales WHERE SaleID = @SaleID", con);
-                    cmd2.Parameters.AddWithValue("@SaleID", saleId);
-                    cmd2.ExecuteNonQuery();
-                    
-
-                    MessageBox.Show("Sale deleted successfully.");
-
-
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show(ex.Message);
-                }
-                finally
-                {
-                    con.Close();
-                }
+                ShowMessage("Sale deleted successfully.");
+                DisplayData();
+                ResetFields();
             }
-            else { MessageBox.Show("Please select a sale to delete."); }
-
-            
-
-
-
+            catch (ApplicationException ex)
+            {
+                ShowMessage($"Could not delete sale:\n{ex.Message}",
+                            "Delete Error", MessageBoxIcon.Error);
+            }
         }
+
+        // ── UI Event Handlers ─────────────────────────────────────
 
         private void dataGridView1_DoubleClick(object sender, EventArgs e)
         {
@@ -416,119 +422,145 @@ namespace Hardware_Shop
                 ProNameTb.Text = dataGridView1.CurrentRow.Cells["ProductName"].Value.ToString();
                 QuenTb.Text = dataGridView1.CurrentRow.Cells["QuantitySold"].Value.ToString();
                 PriceTb.Text = dataGridView1.CurrentRow.Cells["TotalAmount"].Value.ToString();
-                dateTimePicker1.Text = dataGridView1.CurrentRow.Cells["SaleDate"].Value.ToString();
+                dateTimePicker1.Value =
+                    Convert.ToDateTime(dataGridView1.CurrentRow.Cells["SaleDate"].Value);
             }
         }
 
+        private void Clrbtn_Click(object sender, EventArgs e) => ResetFields();
+        private void Cross_Click(object sender, EventArgs e) => this.Close();
 
-        private PrintDocument PrintDocument = new PrintDocument();
-        private int currentRow = 0;
-        private int[] columnWidth;
+        // Navigation — using inherited NavigateTo (INavigable) ✅
+        private void label2_Click(object sender, EventArgs e) => NavigateTo(new Product());
+        private void label3_Click(object sender, EventArgs e) => NavigateTo(new Customers());
+        private void label5_Click(object sender, EventArgs e) => NavigateTo(new Login());
+
+        // ── Print Report (unchanged logic, cleaned up style) ──────
+
+        private void ReportBtn_Click_1(object sender, EventArgs e)
+        {
+            _currentRow = 0;
+            CalculateColumnWidths();
+            PrintPreviewDialog preview = new PrintPreviewDialog
+            {
+                Document = _printDocument
+            };
+            preview.ShowDialog();
+        }
 
         private void CalculateColumnWidths()
         {
-            columnWidth = new int[dataGridView1.Columns.Count];
+            _columnWidths = new int[dataGridView1.Columns.Count];
             using (Graphics g = this.CreateGraphics())
-
+            {
                 for (int i = 0; i < dataGridView1.Columns.Count; i++)
                 {
-                    int maxWidth = (int)g.MeasureString(dataGridView1.Columns[i].HeaderText, new Font("Segoe UI", 9)).Width + 20;
+                    int maxWidth = (int)g.MeasureString(
+                        dataGridView1.Columns[i].HeaderText,
+                        new Font("Segoe UI", 9)).Width + 20;
 
                     foreach (DataGridViewRow row in dataGridView1.Rows)
                     {
                         if (row.Cells[i].Value != null)
                         {
-                            string cellText = row.Cells[i].Value.ToString();
-                            int cellWidth = (int)g.MeasureString(cellText, new Font("Segoe UI", 9)).Width + 20;
-                            if (cellWidth > maxWidth)
-                                maxWidth = cellWidth;
+                            int cellWidth = (int)g.MeasureString(
+                                row.Cells[i].Value.ToString(),
+                                new Font("Segoe UI", 9)).Width + 20;
+                            if (cellWidth > maxWidth) maxWidth = cellWidth;
                         }
                     }
-                    columnWidth[i] = maxWidth;
+                    _columnWidths[i] = maxWidth;
                 }
+            }
         }
+
         private void PrintDocument_PrintPage(object sender, PrintPageEventArgs e)
         {
             int rowHeight = 25;
             int topMargin = e.MarginBounds.Top + 60;
-            int yPosition = topMargin;
+            int yPos = topMargin;
             Font headerFont = new Font("Segoe UI", 14, FontStyle.Bold);
             Font cellFont = new Font("Segoe UI", 9);
             Font tableHeaderFont = new Font("Segoe UI", 9, FontStyle.Bold);
 
             CalculateColumnWidths();
 
-            int tableWidth = columnWidth.Sum();
+            int tableWidth = _columnWidths.Sum();
             int leftMargin = e.MarginBounds.Left + (e.MarginBounds.Width - tableWidth) / 2;
 
-            string heading = "Sales Report ";
+            // Draw heading
+            string heading = "Sales Report";
             SizeF headingSize = e.Graphics.MeasureString(heading, headerFont);
             float headingX = e.MarginBounds.Left + (e.MarginBounds.Width - headingSize.Width) / 2;
             e.Graphics.DrawString(heading, headerFont, Brushes.Black, headingX, e.MarginBounds.Top);
 
             int x = leftMargin;
 
-
+            // Draw column headers
             for (int i = 0; i < dataGridView1.Columns.Count; i++)
             {
-                string headerText = dataGridView1.Columns[i].HeaderText;
-                Rectangle headerRect = new Rectangle(x, yPosition, columnWidth[i], rowHeight);
+                Rectangle headerRect = new Rectangle(x, yPos, _columnWidths[i], rowHeight);
                 e.Graphics.FillRectangle(Brushes.DarkSlateGray, headerRect);
                 e.Graphics.DrawRectangle(Pens.Black, headerRect);
-                e.Graphics.DrawString(headerText, tableHeaderFont, Brushes.White, headerRect);
-                x += columnWidth[i];
+                e.Graphics.DrawString(dataGridView1.Columns[i].HeaderText,
+                                      tableHeaderFont, Brushes.White, headerRect);
+                x += _columnWidths[i];
             }
 
-            yPosition += rowHeight;
-            while (currentRow < dataGridView1.Rows.Count)
+            yPos += rowHeight;
+
+            // Draw rows
+            while (_currentRow < dataGridView1.Rows.Count)
             {
-                DataGridViewRow row = dataGridView1.Rows[currentRow];
+                DataGridViewRow row = dataGridView1.Rows[_currentRow];
                 if (!row.IsNewRow)
-                    x = leftMargin;
-                for (int i = 0; i < dataGridView1.Columns.Count; i++)
                 {
-                    string cellText = row.Cells[i].Value?.ToString() ?? "";
-                    Rectangle cellRect = new Rectangle(x, yPosition, columnWidth[i], rowHeight);
-                    e.Graphics.DrawRectangle(Pens.Black, cellRect);
-                    e.Graphics.DrawString(cellText, cellFont, Brushes.Black, cellRect);
-                    x += columnWidth[i];
+                    x = leftMargin;
+                    for (int i = 0; i < dataGridView1.Columns.Count; i++)
+                    {
+                        string cellText = row.Cells[i].Value?.ToString() ?? "";
+                        Rectangle cellRect = new Rectangle(x, yPos, _columnWidths[i], rowHeight);
+                        e.Graphics.DrawRectangle(Pens.Black, cellRect);
+                        e.Graphics.DrawString(cellText, cellFont, Brushes.Black, cellRect);
+                        x += _columnWidths[i];
+                    }
+                    yPos += rowHeight;
                 }
 
-                yPosition += rowHeight;
-
-                if (yPosition + rowHeight > e.MarginBounds.Bottom)
+                if (yPos + rowHeight > e.MarginBounds.Bottom)
                 {
-                    currentRow++;
+                    _currentRow++;
                     e.HasMorePages = true;
                     return;
                 }
 
-                currentRow++;
+                _currentRow++;
             }
 
-
-            
-
-
-
-
-
-
-            currentRow = 0;
+            _currentRow = 0;
             e.HasMorePages = false;
-
         }
 
-        
+        // ── Private Validation ────────────────────────────────────
 
-        private void ReportBtn_Click_1(object sender, EventArgs e)
+        private bool ValidateSaleInputs()
         {
-            currentRow = 0;
-            CalculateColumnWidths();
-            PrintPreviewDialog preview = new PrintPreviewDialog();
-            preview.Document = PrintDocument;
-            preview.ShowDialog();
+            if (string.IsNullOrWhiteSpace(CusIdCB.Text))
+            {
+                ShowMessage("Please select a customer.", "Validation", MessageBoxIcon.Warning);
+                return false;
+            }
+            if (string.IsNullOrWhiteSpace(ProaldCb.Text))
+            {
+                ShowMessage("Please select a product.", "Validation", MessageBoxIcon.Warning);
+                return false;
+            }
+            if (string.IsNullOrWhiteSpace(QuenTb.Text))
+            {
+                ShowMessage("Please enter a quantity.", "Validation", MessageBoxIcon.Warning);
+                return false;
+            }
+            return true;
         }
     }
 }
-

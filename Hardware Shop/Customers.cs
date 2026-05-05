@@ -1,182 +1,189 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Data;
-using System.Data.SqlClient;
-using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace Hardware_Shop
 {
-    public partial class Customers : Form
+    // ============================================================
+    //  Customers.cs — REFACTORED
+    //
+    //  التغييرات من منظور OOP:
+    //  • ترث من BaseDataForm (Inheritance) ✅
+    //  • DisplayData / ResetFields تعمل override (Polymorphism) ✅
+    //  • SqlConnection اتنقلت لـ DatabaseHelper (Encapsulation) ✅
+    //  • Navigation بـ NavigateTo بدل 3 أسطر مكررة ✅
+    //  • Exception Handling بـ specific exceptions ✅
+    //  • AuditLogger بيسجل كل العمليات (File Handling) ✅
+    // ============================================================
+
+    /// <summary>
+    /// Customers management form.
+    /// Inherits from BaseDataForm — gains DB access, logging, grid styling, navigation.
+    /// Demonstrates: Inheritance, Polymorphism, Encapsulation, Exception Handling,
+    ///               File Handling (via AuditLogger).
+    /// </summary>
+    public partial class Customers : BaseDataForm  // Inheritance ✅
     {
+        // ── Constructor ──────────────────────────────────────────
         public Customers()
         {
             InitializeComponent();
-            DisplayCustomers();
+            DisplayData();   // calls overridden abstract method
         }
-        SqlConnection con = new SqlConnection(@"Data Source=(LocalDB)\MSSQLLocalDB;AttachDbFilename=""C:\Users\USER\OneDrive\المستندات\Hardware Shop MS.mdf"";Integrated Security=True;Connect Timeout=30");
-        private void DisplayCustomers()
+
+        // ────────────────────────────────────────────────────────
+        // POLYMORPHISM — Overriding abstract methods ✅
+        // ────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Loads and displays all customers in the DataGridView.
+        /// Overrides the abstract DisplayData() from BaseDataForm. ✅
+        /// </summary>
+        protected override void DisplayData()  // Polymorphism ✅
         {
             try
             {
-                con.Open();
-                SqlDataAdapter da = new SqlDataAdapter("SELECT * FROM Customers", con);
-                DataTable dt = new DataTable();
-                da.Fill(dt);
+                // DatabaseHelper.ExecuteQuery — no params overload ✅
+                DataTable dt = _db.ExecuteQuery("SELECT * FROM Customers");
                 dataGridView1.DataSource = dt;
-                con.Close();
             }
-            catch (Exception ex)
+            catch (ApplicationException ex)
             {
-                MessageBox.Show(ex.Message);
+                // Catching specific exception type ✅
+                ShowMessage(ex.Message, "Load Error", MessageBoxIcon.Error);
             }
-            finally { con.Close(); }
         }
 
-        private void ResetFields()
+        /// <summary>
+        /// Clears all customer input fields.
+        /// Overrides abstract ResetFields() from BaseDataForm. ✅
+        /// </summary>
+        protected override void ResetFields()  // Polymorphism ✅
         {
-
-
             CusNameTb.Text = "";
             CusPhoneTb.Text = "";
             Ptb.Text = "";
-
-
         }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        private void Cross_Click(object sender, EventArgs e)
-        {
-            this.Close();
-        }
-
-        private void label2_Click(object sender, EventArgs e)
-        {
-            Product product = new Product();
-            product.Show();
-            this.Hide();
-        }
-
-        private void label4_Click(object sender, EventArgs e)
-        {
-            Sales sales = new Sales();
-            sales.Show();
-            this.Hide();
-        }
-
-        private void label5_Click(object sender, EventArgs e)
-        {
-            Login login = new Login();
-            login.Show();
-            this.Hide();
-        }
-
-        private void Clrbtn_Click(object sender, EventArgs e)
-        {
-            ResetFields();
-        }
+        // ────────────────────────────────────────────────────────
+        // CRUD OPERATIONS — use DatabaseHelper + AuditLogger
+        // ────────────────────────────────────────────────────────
 
         private void Addbtn_Click(object sender, EventArgs e)
         {
+            // Validate inputs before attempting DB operation ✅
+            if (!ValidateInputs()) return;
+
             try
             {
-                con.Open();
-                SqlCommand cmd = new SqlCommand("INSERT INTO Customers (CName, Phone, Email) VALUES (@CName, @Phone, @Email)", con);
-                cmd.Parameters.AddWithValue("@CName", CusNameTb.Text);
-                cmd.Parameters.AddWithValue("@Phone", CusPhoneTb.Text);
-                cmd.Parameters.AddWithValue("@Email", Ptb.Text);
-                cmd.ExecuteNonQuery();
-                MessageBox.Show("Customer Added Successfully"); // Show a success message after adding the customer
-                con.Close();
-                DisplayCustomers(); // Refresh the customer list after adding a new customer
-                ResetFields(); // Clear the input fields after adding the customer
+                var parameters = new Dictionary<string, object>
+                {
+                    { "@CName", CusNameTb.Text.Trim() },
+                    { "@Phone", CusPhoneTb.Text.Trim() },
+                    { "@Email", Ptb.Text.Trim() }
+                };
+
+                _db.ExecuteNonQuery(
+                    "INSERT INTO Customers (CName, Phone, Email) VALUES (@CName, @Phone, @Email)",
+                    parameters);
+
+                // File Handling via AuditLogger ✅
+                _logger.LogAction("INSERT", "Customers",
+                                  $"Added customer: {CusNameTb.Text.Trim()}");
+
+                ShowMessage("Customer added successfully.");
+                DisplayData();
+                ResetFields();
             }
-            catch (Exception ex)
+            catch (ApplicationException ex)
             {
-                MessageBox.Show(ex.Message);
-            }
-            finally
-            {
-                con.Close();
+                ShowMessage($"Could not add customer:\n{ex.Message}",
+                            "Insert Error", MessageBoxIcon.Error);
             }
         }
 
         private void UpdateBtn_Click(object sender, EventArgs e)
         {
-            int id = Convert.ToInt32(dataGridView1.SelectedRows[0].Cells[0].Value);
+            if (dataGridView1.SelectedRows.Count == 0)
+            {
+                ShowMessage("Please select a customer to update.",
+                            "No Selection", MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (!ValidateInputs()) return;
+
             try
             {
-                con.Open();
-                SqlCommand cmd = new SqlCommand("UPDATE Customers SET CName=@CName, Phone=@Phone, Email=@Email WHERE CustomerID=@CustomerID", con);
-                cmd.Parameters.AddWithValue("@CustomerID",id);
-                cmd.Parameters.AddWithValue("@CName", CusNameTb.Text);
-                cmd.Parameters.AddWithValue("@Phone", CusPhoneTb.Text);
-                cmd.Parameters.AddWithValue("@Email", Ptb.Text);         
-                cmd.ExecuteNonQuery();
-                MessageBox.Show("Customer Updated Successfully"); // Show a success message after updating the customer
-                con.Close();
-                DisplayCustomers(); // Refresh the customer list after updating a customer
-                ResetFields(); // Clear the input fields after updating the customer
+                int id = Convert.ToInt32(dataGridView1.SelectedRows[0].Cells[0].Value);
+
+                var parameters = new Dictionary<string, object>
+                {
+                    { "@CustomerID", id },
+                    { "@CName",  CusNameTb.Text.Trim() },
+                    { "@Phone",  CusPhoneTb.Text.Trim() },
+                    { "@Email",  Ptb.Text.Trim() }
+                };
+
+                _db.ExecuteNonQuery(
+                    "UPDATE Customers SET CName=@CName, Phone=@Phone, Email=@Email " +
+                    "WHERE CustomerID=@CustomerID",
+                    parameters);
+
+                _logger.LogAction("UPDATE", "Customers",
+                                  $"Updated CustomerID={id}, Name={CusNameTb.Text.Trim()}");
+
+                ShowMessage("Customer updated successfully.");
+                DisplayData();
+                ResetFields();
             }
-            catch (Exception ex)
+            catch (ApplicationException ex)
             {
-                MessageBox.Show(ex.Message);
-            }
-            finally
-            {
-                con.Close();
+                ShowMessage($"Could not update customer:\n{ex.Message}",
+                            "Update Error", MessageBoxIcon.Error);
             }
         }
 
         private void DelBtn_Click(object sender, EventArgs e)
         {
-            if (dataGridView1.SelectedRows.Count > 0)
+            if (dataGridView1.SelectedRows.Count == 0)
             {
-
-                int id = Convert.ToInt32(dataGridView1.SelectedRows[0].Cells[0].Value);
-                try
-                {
-                    con.Open();
-
-                    SqlCommand cmd = new SqlCommand("DELETE FROM Customers WHERE CustomerID=@CustomerID", con);
-                    cmd.Parameters.AddWithValue("@CustomerID", id);
-                    cmd.ExecuteNonQuery();
-                    MessageBox.Show("Customer Deleted Successfully");
-                    con.Close();
-                    DisplayCustomers();
-                    ResetFields();
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show(ex.Message);
-                }
-                finally
-                {
-                    con.Close();
-                }
+                ShowMessage("Please select a customer to delete.",
+                            "No Selection", MessageBoxIcon.Warning);
+                return;
             }
-            else
+
+            DialogResult confirm = MessageBox.Show(
+                "Are you sure you want to delete this customer?",
+                "Confirm Delete",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+
+            if (confirm != DialogResult.Yes) return;
+
+            try
             {
-                MessageBox.Show("Please select a customer to delete.");
+                int id = Convert.ToInt32(dataGridView1.SelectedRows[0].Cells[0].Value);
+
+                _db.ExecuteNonQuery(
+                    "DELETE FROM Customers WHERE CustomerID=@CustomerID",
+                    new Dictionary<string, object> { { "@CustomerID", id } });
+
+                _logger.LogAction("DELETE", "Customers", $"Deleted CustomerID={id}");
+
+                ShowMessage("Customer deleted successfully.");
+                DisplayData();
+                ResetFields();
+            }
+            catch (ApplicationException ex)
+            {
+                ShowMessage($"Could not delete customer:\n{ex.Message}",
+                            "Delete Error", MessageBoxIcon.Error);
             }
         }
+
+        // ── UI Event Handlers ─────────────────────────────────────
 
         private void dataGridView1_DoubleClick(object sender, EventArgs e)
         {
@@ -190,17 +197,40 @@ namespace Hardware_Shop
 
         private void Customers_Load(object sender, EventArgs e)
         {
-            Color customColor = Color.FromArgb(44, 62, 80); // Custom color
+            ApplyGridStyle(dataGridView1);  // Inherited from BaseDataForm ✅
+        }
 
-            dataGridView1.EnableHeadersVisualStyles = false;
-            dataGridView1.ColumnHeadersDefaultCellStyle.BackColor = customColor;
-            dataGridView1.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-            dataGridView1.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 9, FontStyle.Bold);
+        private void Clrbtn_Click(object sender, EventArgs e) => ResetFields();
+        private void Cross_Click(object sender, EventArgs e) => this.Close();
 
-            dataGridView1.DefaultCellStyle.SelectionBackColor = customColor;
-            dataGridView1.DefaultCellStyle.SelectionForeColor = Color.White;
+        // Navigation — using inherited NavigateTo (INavigable) ✅
+        private void label2_Click(object sender, EventArgs e) => NavigateTo(new Product());
+        private void label4_Click(object sender, EventArgs e) => NavigateTo(new Sales());
+        private void label5_Click(object sender, EventArgs e) => NavigateTo(new Login());
 
-            dataGridView1.GridColor = Color.LightGray;
+        // ── Private Validation ────────────────────────────────────
+
+        /// <summary>
+        /// Validates that all required customer fields are filled.
+        /// Encapsulates validation logic in a single reusable method.
+        /// </summary>
+        private bool ValidateInputs()
+        {
+            if (string.IsNullOrWhiteSpace(CusNameTb.Text))
+            {
+                ShowMessage("Customer name is required.",
+                            "Validation", MessageBoxIcon.Warning);
+                CusNameTb.Focus();
+                return false;
+            }
+            if (string.IsNullOrWhiteSpace(CusPhoneTb.Text))
+            {
+                ShowMessage("Phone number is required.",
+                            "Validation", MessageBoxIcon.Warning);
+                CusPhoneTb.Focus();
+                return false;
+            }
+            return true;
         }
     }
 }
